@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>지뢰찾기 — 미니 게임 모음</title>
+<style>
+  :root {
+    --void: #dfe3e8; --surface: #eef1f4; --surface-2: #f7f9fb;
+    --ink: #171c22; --fog: #57616d; --line: #cdd4dc;
+    --live: #e63329;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --void: #0e1116; --surface: #161b22; --surface-2: #1c222b; --ink: #eef1f4; --fog: #97a1ad; --line: #2a313b; --live: #ff4136; }
+  }
+  :root[data-theme="light"] { --void: #dfe3e8; --surface: #eef1f4; --surface-2: #f7f9fb; --ink: #171c22; --fog: #57616d; --line: #cdd4dc; --live: #e63329; }
+  :root[data-theme="dark"] { --void: #0e1116; --surface: #161b22; --surface-2: #1c222b; --ink: #eef1f4; --fog: #97a1ad; --line: #2a313b; --live: #ff4136; }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+    background: var(--void); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, "Malgun Gothic", sans-serif;
+    line-height: 1.6; -webkit-font-smoothing: antialiased; user-select: none;
+  }
+
+  /* ---- shared page shell ---- */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--surface);
+    position: sticky; top: 0; z-index: 10; flex-wrap: wrap;
+  }
+  .back { text-decoration: none; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid var(--line); background: var(--surface-2); transition: border-color .15s; }
+  .back:hover { border-color: var(--live); }
+  .topbar .name { font-weight: 800; letter-spacing: -.01em; display: inline-flex; align-items: center; gap: 8px; }
+  .topbar .name .en { font-family: "SF Mono", monospace; font-size: .62rem; letter-spacing: .3em; text-transform: uppercase; color: var(--live); }
+  .theme-toggle { font-family: "SF Mono", monospace; font-size: .78rem; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; cursor: pointer; }
+  .theme-toggle:hover { border-color: var(--live); }
+
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 32px 20px; }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .controls button {
+    font-family: "SF Mono", monospace; font-size: .82rem; padding: 9px 16px; cursor: pointer;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line); transition: all .12s ease;
+  }
+  .controls button:hover { border-color: var(--live); }
+  .controls button.active { background: var(--live); color: #fff; border-color: var(--live); }
+
+  /* ---- classic minesweeper board (kept) ---- */
+  .frame { display: inline-block; background: #c0c0c0; padding: 12px; border: 5px solid; border-color: #fff #808080 #808080 #fff; }
+  .status { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 6px 8px; background: #1a1a1a; border: 3px solid; border-color: #808080 #fff #fff #808080; }
+  .counter { font-family: "Consolas", monospace; font-size: 1.5rem; font-weight: 700; color: #ff2d20; background: #000; padding: 2px 8px; min-width: 62px; text-align: center; font-variant-numeric: tabular-nums; }
+  .reset { font-size: 1.5rem; line-height: 1; padding: 3px 8px; cursor: pointer; background: #c0c0c0; border: 3px solid; border-color: #fff #808080 #808080 #fff; }
+  .reset:active { border-color: #808080 #fff #fff #808080; }
+
+  #board { display: grid; gap: 0; }
+  .cell { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; cursor: pointer; background: #c0c0c0; border: 3px solid; border-color: #fff #808080 #808080 #fff; }
+  .cell.revealed { border: 1px solid #999; background: #d6d6d6; cursor: default; }
+  .cell.mine { background: #ff4136; }
+  .cell.flag { color: #d63031; }
+  .c1 { color: #0000ff; } .c2 { color: #008000; } .c3 { color: #ff0000; } .c4 { color: #000080; }
+  .c5 { color: #800000; } .c6 { color: #008080; } .c7 { color: #000; } .c8 { color: #808080; }
+
+  .hint { font-size: .88rem; color: var(--fog); text-align: center; }
+
+  footer { padding: 22px 24px; border-top: 1px solid var(--line); color: var(--fog); text-align: center; }
+  .mono { font-family: "SF Mono", "Consolas", monospace; font-size: .78rem; letter-spacing: .04em; }
+
+  @media (max-width: 560px) { .cell { width: 26px; height: 26px; font-size: 13px; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="index.html">← 게임 모음</a>
+  <span class="name">💣 지뢰찾기 <span class="en">Minesweeper</span></span>
+  <button class="theme-toggle" id="themeToggle">🌗 테마</button>
+</div>
+
+<div class="stage">
+  <div class="controls">
+    <button data-level="easy" class="active">초급 · 9×9 · 10</button>
+    <button data-level="medium">중급 · 16×16 · 40</button>
+    <button data-level="hard">고급 · 16×30 · 99</button>
+  </div>
+
+  <div class="frame">
+    <div class="status">
+      <div class="counter" id="mineCount">010</div>
+      <div class="reset" id="reset" role="button" tabindex="0" aria-label="새 게임">🙂</div>
+      <div class="counter" id="timer">000</div>
+    </div>
+    <div id="board"></div>
+  </div>
+
+  <div class="hint">좌클릭: 열기 · 우클릭: 깃발 · 열린 숫자 클릭(양클릭): 주변 열기</div>
+</div>
+
+<footer><span class="mono">💣 지뢰찾기 · 미니 게임 모음</span></footer>
+
+<script>
+/* ===== theme toggle (shared) ===== */
+(function () {
+  const root = document.documentElement;
+  const btn = document.getElementById('themeToggle');
+  const saved = localStorage.getItem('mg-theme');
+  if (saved) root.setAttribute('data-theme', saved);
+  btn && btn.addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('mg-theme', next);
+  });
+})();
+
+/* ===== minesweeper (kept logic) ===== */
+const LEVELS = {
+  easy:   { rows: 9,  cols: 9,  mines: 10 },
+  medium: { rows: 16, cols: 16, mines: 40 },
+  hard:   { rows: 16, cols: 30, mines: 99 },
+};
+
+const boardEl = document.getElementById('board');
+const mineCountEl = document.getElementById('mineCount');
+const timerEl = document.getElementById('timer');
+const resetEl = document.getElementById('reset');
+
+let config, grid, revealedCount, flagCount, gameOver, firstClick, timerId, seconds;
+
+function pad(n) { return String(Math.max(0, n)).padStart(3, '0'); }
+
+function initGame(level) {
+  config = LEVELS[level];
+  clearInterval(timerId);
+  seconds = 0;
+  timerEl.textContent = '000';
+  revealedCount = 0;
+  flagCount = 0;
+  gameOver = false;
+  firstClick = true;
+  resetEl.textContent = '🙂';
+  mineCountEl.textContent = pad(config.mines);
+
+  grid = [];
+  for (let r = 0; r < config.rows; r++) {
+    const row = [];
+    for (let c = 0; c < config.cols; c++) row.push({ mine: false, revealed: false, flagged: false, adj: 0 });
+    grid.push(row);
+  }
+
+  boardEl.style.gridTemplateColumns = `repeat(${config.cols}, 30px)`;
+  boardEl.innerHTML = '';
+  for (let r = 0; r < config.rows; r++) {
+    for (let c = 0; c < config.cols; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      boardEl.appendChild(cell);
+    }
+  }
+}
+
+function placeMines(safeR, safeC) {
+  let placed = 0;
+  const safe = new Set();
+  for (let dr = -1; dr <= 1; dr++)
+    for (let dc = -1; dc <= 1; dc++)
+      safe.add((safeR + dr) + ',' + (safeC + dc));
+
+  while (placed < config.mines) {
+    const r = Math.floor(Math.random() * config.rows);
+    const c = Math.floor(Math.random() * config.cols);
+    if (grid[r][c].mine || safe.has(r + ',' + c)) continue;
+    grid[r][c].mine = true;
+    placed++;
+  }
+
+  for (let r = 0; r < config.rows; r++)
+    for (let c = 0; c < config.cols; c++) {
+      if (grid[r][c].mine) continue;
+      grid[r][c].adj = neighbors(r, c).filter(([nr, nc]) => grid[nr][nc].mine).length;
+    }
+}
+
+function neighbors(r, c) {
+  const out = [];
+  for (let dr = -1; dr <= 1; dr++)
+    for (let dc = -1; dc <= 1; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < config.rows && nc >= 0 && nc < config.cols) out.push([nr, nc]);
+    }
+  return out;
+}
+
+function cellEl(r, c) { return boardEl.children[r * config.cols + c]; }
+function startTimer() { timerId = setInterval(() => { seconds++; timerEl.textContent = pad(seconds); if (seconds >= 999) clearInterval(timerId); }, 1000); }
+
+function reveal(r, c) {
+  const cell = grid[r][c];
+  if (cell.revealed || cell.flagged) return;
+  cell.revealed = true;
+  revealedCount++;
+  const el = cellEl(r, c);
+  el.classList.add('revealed');
+  if (cell.mine) { el.classList.add('mine'); el.textContent = '💣'; loseGame(); return; }
+  if (cell.adj > 0) { el.textContent = cell.adj; el.classList.add('c' + cell.adj); }
+  else for (const [nr, nc] of neighbors(r, c)) reveal(nr, nc);
+}
+
+function loseGame() {
+  gameOver = true;
+  clearInterval(timerId);
+  resetEl.textContent = '😵';
+  for (let r = 0; r < config.rows; r++)
+    for (let c = 0; c < config.cols; c++) {
+      const cell = grid[r][c], el = cellEl(r, c);
+      if (cell.mine && !cell.flagged) { el.classList.add('revealed'); el.textContent = '💣'; }
+      else if (!cell.mine && cell.flagged) el.textContent = '❌';
+    }
+}
+
+function checkWin() {
+  const total = config.rows * config.cols;
+  if (revealedCount === total - config.mines) {
+    gameOver = true;
+    clearInterval(timerId);
+    resetEl.textContent = '😎';
+    for (let r = 0; r < config.rows; r++)
+      for (let c = 0; c < config.cols; c++)
+        if (grid[r][c].mine && !grid[r][c].flagged) {
+          grid[r][c].flagged = true;
+          const el = cellEl(r, c);
+          el.classList.add('flag');
+          el.textContent = '🚩';
+        }
+    flagCount = config.mines;
+    mineCountEl.textContent = pad(0);
+  }
+}
+
+function toggleFlag(r, c) {
+  const cell = grid[r][c];
+  if (cell.revealed) return;
+  cell.flagged = !cell.flagged;
+  const el = cellEl(r, c);
+  if (cell.flagged) { el.classList.add('flag'); el.textContent = '🚩'; flagCount++; }
+  else { el.classList.remove('flag'); el.textContent = ''; flagCount--; }
+  mineCountEl.textContent = pad(config.mines - flagCount);
+}
+
+function chord(r, c) {
+  const cell = grid[r][c];
+  if (!cell.revealed || cell.adj === 0) return;
+  const nbrs = neighbors(r, c);
+  const flagged = nbrs.filter(([nr, nc]) => grid[nr][nc].flagged).length;
+  if (flagged === cell.adj)
+    for (const [nr, nc] of nbrs)
+      if (!grid[nr][nc].flagged && !grid[nr][nc].revealed) { reveal(nr, nc); if (gameOver) return; }
+}
+
+boardEl.addEventListener('click', (e) => {
+  const el = e.target.closest('.cell');
+  if (!el || gameOver) return;
+  const r = +el.dataset.r, c = +el.dataset.c;
+  if (grid[r][c].revealed) { chord(r, c); }
+  else {
+    if (firstClick) { placeMines(r, c); firstClick = false; startTimer(); }
+    reveal(r, c);
+  }
+  if (!gameOver) checkWin();
+});
+
+boardEl.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const el = e.target.closest('.cell');
+  if (!el || gameOver || firstClick) return;
+  toggleFlag(+el.dataset.r, +el.dataset.c);
+});
+
+const newGame = () => { const a = document.querySelector('.controls button.active'); initGame(a.dataset.level); };
+resetEl.addEventListener('click', newGame);
+resetEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); newGame(); } });
+document.querySelectorAll('.controls button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    initGame(btn.dataset.level);
+  });
+});
+
+initGame('easy');
+</script>
+</body>
+</html>

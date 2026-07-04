@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>메모리 짝맞추기 — 미니 게임 모음</title>
+<style>
+  :root {
+    --void: #dfe3e8; --surface: #eef1f4; --surface-2: #f7f9fb;
+    --ink: #171c22; --fog: #57616d; --line: #cdd4dc; --live: #e63329;
+    --card-back: #3a7bd5; --card-face: #f7f9fb; --matched: #2f9e5b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --void: #0e1116; --surface: #161b22; --surface-2: #1c222b; --ink: #eef1f4; --fog: #97a1ad; --line: #2a313b; --live: #ff4136; --card-back: #2b4d80; --card-face: #1c222b; --matched: #3fb56b; }
+  }
+  :root[data-theme="light"] { --void: #dfe3e8; --surface: #eef1f4; --surface-2: #f7f9fb; --ink: #171c22; --fog: #57616d; --line: #cdd4dc; --live: #e63329; --card-back: #3a7bd5; --card-face: #f7f9fb; --matched: #2f9e5b; }
+  :root[data-theme="dark"] { --void: #0e1116; --surface: #161b22; --surface-2: #1c222b; --ink: #eef1f4; --fog: #97a1ad; --line: #2a313b; --live: #ff4136; --card-back: #2b4d80; --card-face: #1c222b; --matched: #3fb56b; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--void); color: var(--ink); font-family: "Segoe UI", system-ui, -apple-system, "Malgun Gothic", sans-serif; line-height: 1.6; -webkit-font-smoothing: antialiased; user-select: none; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
+  .back { text-decoration: none; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid var(--line); background: var(--surface-2); transition: border-color .15s; }
+  .back:hover { border-color: var(--live); }
+  .topbar .name { font-weight: 800; letter-spacing: -.01em; display: inline-flex; align-items: center; gap: 8px; }
+  .topbar .name .en { font-family: "SF Mono", monospace; font-size: .62rem; letter-spacing: .3em; text-transform: uppercase; color: var(--live); }
+  .theme-toggle { font-family: "SF Mono", monospace; font-size: .78rem; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; cursor: pointer; }
+  .theme-toggle:hover { border-color: var(--live); }
+
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 32px 20px; }
+
+  .toolbar { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; justify-content: center; }
+  .scorebox { background: var(--surface); border: 1px solid var(--line); padding: 8px 16px; text-align: center; min-width: 78px; }
+  .scorebox .lbl { font-family: "SF Mono", monospace; font-size: .6rem; letter-spacing: .18em; text-transform: uppercase; color: var(--fog); }
+  .scorebox .val { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .diff { display: flex; }
+  .diff button { font-family: "SF Mono", monospace; font-size: .78rem; padding: 8px 13px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-right: 0; }
+  .diff button:last-child { border-right: 1px solid var(--line); }
+  .diff button.active { background: var(--live); color: #fff; border-color: var(--live); }
+  .btn { font-family: "SF Mono", monospace; font-size: .82rem; padding: 10px 18px; cursor: pointer; background: var(--live); color: #fff; border: 0; }
+  .btn:hover { filter: brightness(1.08); }
+
+  .board-wrap { position: relative; }
+  #board { display: grid; gap: 10px; width: min(92vw, 480px); }
+  .card { aspect-ratio: 3/4; perspective: 700px; cursor: pointer; }
+  .inner { position: relative; width: 100%; height: 100%; transition: transform .35s; transform-style: preserve-3d; }
+  .card.flipped .inner, .card.matched .inner { transform: rotateY(180deg); }
+  .face { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; backface-visibility: hidden; border: 2px solid var(--line); }
+  .front { background: var(--card-back); color: #fff; font-size: 1.6rem; box-shadow: inset 0 0 0 3px rgba(255,255,255,.14); }
+  .front::after { content: "?"; font-weight: 800; opacity: .85; }
+  .back { background: var(--card-face); transform: rotateY(180deg); font-size: clamp(1.6rem, 8vw, 2.6rem); }
+  .card.matched .back { border-color: var(--matched); box-shadow: 0 0 0 2px var(--matched); }
+  @media (prefers-reduced-motion: reduce) { .inner { transition: none; } }
+
+  .overlay { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: rgba(0,0,0,.6); border-radius: 10px; color: #fff; text-align: center; padding: 20px; }
+  .overlay.show { display: flex; }
+  .overlay h2 { margin: 0; font-size: 1.8rem; font-weight: 800; }
+  .overlay p { margin: 0; opacity: .9; }
+
+  .hint { font-size: .88rem; color: var(--fog); text-align: center; max-width: 460px; }
+  footer { padding: 22px 24px; border-top: 1px solid var(--line); color: var(--fog); text-align: center; }
+  .mono { font-family: "SF Mono", "Consolas", monospace; font-size: .78rem; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="index.html">← 게임 모음</a>
+  <span class="name">🃏 메모리 짝맞추기 <span class="en">Memory Match</span></span>
+  <button class="theme-toggle" id="themeToggle">🌗 테마</button>
+</div>
+
+<div class="stage">
+  <div class="toolbar">
+    <div class="scorebox"><div class="lbl">이동</div><div class="val" id="moves">0</div></div>
+    <div class="scorebox"><div class="lbl">시간</div><div class="val" id="time">0:00</div></div>
+    <div class="scorebox"><div class="lbl">짝</div><div class="val" id="pairs">0/0</div></div>
+    <div class="diff" id="diff">
+      <button data-pairs="6">쉬움</button>
+      <button data-pairs="8" class="active">보통</button>
+      <button data-pairs="10">어려움</button>
+    </div>
+    <button class="btn" id="restart">새 게임</button>
+  </div>
+
+  <div class="board-wrap">
+    <div id="board"></div>
+    <div class="overlay" id="overlay">
+      <h2>🎉 완료!</h2>
+      <p id="ovText"></p>
+      <button class="btn" id="ovBtn">다시 하기</button>
+    </div>
+  </div>
+
+  <div class="hint">카드를 클릭해 뒤집고 같은 그림 두 장을 찾으세요. 적은 이동수와 짧은 시간이 목표입니다.</div>
+</div>
+
+<footer><span class="mono">🃏 메모리 짝맞추기 · 미니 게임 모음</span></footer>
+
+<script>
+/* ===== theme toggle (shared) ===== */
+(function () {
+  const root = document.documentElement;
+  const btn = document.getElementById('themeToggle');
+  const saved = localStorage.getItem('mg-theme');
+  if (saved) root.setAttribute('data-theme', saved);
+  btn && btn.addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('mg-theme', next);
+  });
+})();
+
+/* ===== memory match ===== */
+(function () {
+  const EMOJIS = ['🍎','🍌','🍇','🍒','🍑','🍊','🥝','🍓','🍍','🥥','🍉','🫐','🥕','🌽','🍄','🌶️'];
+  const boardEl = document.getElementById('board');
+  const movesEl = document.getElementById('moves');
+  const timeEl = document.getElementById('time');
+  const pairsEl = document.getElementById('pairs');
+  const overlay = document.getElementById('overlay');
+  const ovText = document.getElementById('ovText');
+
+  let pairCount = 8;
+  let deck, first = null, lock = false, moves = 0, matched = 0;
+  let timerId = null, seconds = 0, started = false;
+
+  function shuffle(a) { // Fisher–Yates
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+  function startTimer() {
+    if (started) return;
+    started = true;
+    timerId = setInterval(() => { seconds++; timeEl.textContent = fmt(seconds); }, 1000);
+  }
+
+  function build() {
+    clearInterval(timerId);
+    first = null; lock = false; moves = 0; matched = 0; seconds = 0; started = false;
+    movesEl.textContent = 0; timeEl.textContent = '0:00';
+    pairsEl.textContent = '0/' + pairCount;
+    overlay.classList.remove('show');
+
+    const chosen = shuffle(EMOJIS.slice()).slice(0, pairCount);
+    deck = shuffle(chosen.concat(chosen));
+
+    // responsive columns: keep roughly square
+    const cols = pairCount <= 6 ? 4 : (pairCount <= 8 ? 4 : 5);
+    boardEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+    boardEl.innerHTML = '';
+    deck.forEach((emoji, i) => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.emoji = emoji;
+      card.dataset.i = i;
+      card.innerHTML = `<div class="inner"><div class="face front"></div><div class="face back">${emoji}</div></div>`;
+      boardEl.appendChild(card);
+    });
+  }
+
+  boardEl.addEventListener('click', e => {
+    const card = e.target.closest('.card');
+    if (!card || lock) return;
+    if (card.classList.contains('flipped') || card.classList.contains('matched')) return;
+    startTimer();
+    card.classList.add('flipped');
+
+    if (!first) { first = card; return; }
+
+    moves++; movesEl.textContent = moves;
+    const second = card;
+
+    if (first.dataset.emoji === second.dataset.emoji) {
+      first.classList.add('matched');
+      second.classList.add('matched');
+      first = null;
+      matched++;
+      pairsEl.textContent = matched + '/' + pairCount;
+      if (matched === pairCount) finish();
+    } else {
+      lock = true;
+      const a = first, b = second; first = null;
+      setTimeout(() => {
+        a.classList.remove('flipped');
+        b.classList.remove('flipped');
+        lock = false;
+      }, 750);
+    }
+  });
+
+  function finish() {
+    clearInterval(timerId);
+    ovText.textContent = `${moves}번 이동 · ${fmt(seconds)} 소요`;
+    setTimeout(() => overlay.classList.add('show'), 450);
+  }
+
+  document.getElementById('diff').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#diff button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    pairCount = +btn.dataset.pairs;
+    build();
+  });
+  document.getElementById('restart').addEventListener('click', build);
+  document.getElementById('ovBtn').addEventListener('click', build);
+
+  build();
+})();
+</script>
+</body>
+</html>

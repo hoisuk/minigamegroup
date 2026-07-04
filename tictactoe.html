@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>틱택토 — 미니 게임 모음</title>
+<style>
+  :root {
+    --void: #dfe3e8; --surface: #eef1f4; --surface-2: #f7f9fb;
+    --ink: #171c22; --fog: #57616d; --line: #cdd4dc; --live: #e63329;
+    --board: #cdd4dc; --cell: #f7f9fb; --x: #3a7bd5; --o: #e63329; --win: #2f9e5b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --void: #0e1116; --surface: #161b22; --surface-2: #1c222b; --ink: #eef1f4; --fog: #97a1ad; --line: #2a313b; --live: #ff4136; --board: #2a313b; --cell: #1c222b; --x: #5a9bf5; --o: #ff5145; --win: #3fb56b; }
+  }
+  :root[data-theme="light"] { --void: #dfe3e8; --surface: #eef1f4; --surface-2: #f7f9fb; --ink: #171c22; --fog: #57616d; --line: #cdd4dc; --live: #e63329; --board: #cdd4dc; --cell: #f7f9fb; --x: #3a7bd5; --o: #e63329; --win: #2f9e5b; }
+  :root[data-theme="dark"] { --void: #0e1116; --surface: #161b22; --surface-2: #1c222b; --ink: #eef1f4; --fog: #97a1ad; --line: #2a313b; --live: #ff4136; --board: #2a313b; --cell: #1c222b; --x: #5a9bf5; --o: #ff5145; --win: #3fb56b; }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--void); color: var(--ink); font-family: "Segoe UI", system-ui, -apple-system, "Malgun Gothic", sans-serif; line-height: 1.6; -webkit-font-smoothing: antialiased; user-select: none; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 10; flex-wrap: wrap; }
+  .back { text-decoration: none; color: var(--ink); font-weight: 600; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border: 1px solid var(--line); background: var(--surface-2); transition: border-color .15s; }
+  .back:hover { border-color: var(--live); }
+  .topbar .name { font-weight: 800; letter-spacing: -.01em; display: inline-flex; align-items: center; gap: 8px; }
+  .topbar .name .en { font-family: "SF Mono", monospace; font-size: .62rem; letter-spacing: .3em; text-transform: uppercase; color: var(--live); }
+  .theme-toggle { font-family: "SF Mono", monospace; font-size: .78rem; background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); padding: 8px 14px; cursor: pointer; }
+  .theme-toggle:hover { border-color: var(--live); }
+
+  .stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 32px 20px; }
+
+  .modes { display: flex; }
+  .modes button { font-family: "SF Mono", monospace; font-size: .8rem; padding: 9px 16px; cursor: pointer; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-right: 0; }
+  .modes button:last-child { border-right: 1px solid var(--line); }
+  .modes button.active { background: var(--live); color: #fff; border-color: var(--live); }
+
+  .status { font-size: 1.15rem; font-weight: 700; min-height: 1.6em; text-align: center; }
+  .status .who { font-weight: 800; }
+
+  #board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--board); padding: 8px; border-radius: 10px; width: min(84vw, 340px); aspect-ratio: 1; }
+  .sq { display: flex; align-items: center; justify-content: center; background: var(--cell); border-radius: 6px; font-size: clamp(2.4rem, 14vw, 4rem); font-weight: 800; cursor: pointer; transition: background .12s; line-height: 1; }
+  .sq:hover:not(.taken) { background: var(--surface); }
+  .sq.x { color: var(--x); }
+  .sq.o { color: var(--o); }
+  .sq.taken { cursor: default; }
+  .sq.win { background: var(--win); color: #fff; }
+
+  .scoreboard { display: flex; gap: 10px; }
+  .sc { background: var(--surface); border: 1px solid var(--line); padding: 8px 18px; text-align: center; min-width: 74px; }
+  .sc .lbl { font-family: "SF Mono", monospace; font-size: .62rem; letter-spacing: .16em; text-transform: uppercase; color: var(--fog); }
+  .sc .val { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .sc.x .val { color: var(--x); } .sc.o .val { color: var(--o); }
+
+  .btn { font-family: "SF Mono", monospace; font-size: .82rem; padding: 10px 18px; cursor: pointer; background: var(--live); color: #fff; border: 0; }
+  .btn:hover { filter: brightness(1.08); }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
+
+  .hint { font-size: .88rem; color: var(--fog); text-align: center; max-width: 400px; }
+  footer { padding: 22px 24px; border-top: 1px solid var(--line); color: var(--fog); text-align: center; }
+  .mono { font-family: "SF Mono", "Consolas", monospace; font-size: .78rem; letter-spacing: .04em; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="back" href="index.html">← 게임 모음</a>
+  <span class="name">⭕ 틱택토 <span class="en">Tic-Tac-Toe</span></span>
+  <button class="theme-toggle" id="themeToggle">🌗 테마</button>
+</div>
+
+<div class="stage">
+  <div class="modes" id="modes">
+    <button data-mode="ai" class="active">AI 대전</button>
+    <button data-mode="pvp">2인 대전</button>
+  </div>
+
+  <div class="status" id="status">플레이어 <span class="who" style="color:var(--x)">X</span> 차례</div>
+
+  <div id="board"></div>
+
+  <div class="scoreboard">
+    <div class="sc x"><div class="lbl" id="lblX">X (나)</div><div class="val" id="scX">0</div></div>
+    <div class="sc"><div class="lbl">무승부</div><div class="val" id="scD">0</div></div>
+    <div class="sc o"><div class="lbl" id="lblO">O (AI)</div><div class="val" id="scO">0</div></div>
+  </div>
+
+  <div class="row">
+    <button class="btn" id="newRound">새 판</button>
+    <button class="btn" id="resetScore" style="background:var(--fog)">점수 초기화</button>
+  </div>
+
+  <div class="hint">AI 대전 모드의 컴퓨터(O)는 최선의 수를 두므로 이기긴 어렵습니다. 무승부를 노려보세요!</div>
+</div>
+
+<footer><span class="mono">⭕ 틱택토 · 미니 게임 모음</span></footer>
+
+<script>
+/* ===== theme toggle (shared) ===== */
+(function () {
+  const root = document.documentElement;
+  const btn = document.getElementById('themeToggle');
+  const saved = localStorage.getItem('mg-theme');
+  if (saved) root.setAttribute('data-theme', saved);
+  btn && btn.addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem('mg-theme', next);
+  });
+})();
+
+/* ===== tic-tac-toe ===== */
+(function () {
+  const WINS = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6],
+  ];
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+  const scXEl = document.getElementById('scX');
+  const scOEl = document.getElementById('scO');
+  const scDEl = document.getElementById('scD');
+
+  let cells = [];               // DOM squares
+  let board = Array(9).fill(''); // '', 'X', 'O'
+  let turn = 'X';               // human is always X; in AI mode O is computer
+  let mode = 'ai';
+  let over = false;
+  let score = { X: 0, O: 0, D: 0 };
+
+  // build squares
+  for (let i = 0; i < 9; i++) {
+    const sq = document.createElement('div');
+    sq.className = 'sq';
+    sq.dataset.i = i;
+    boardEl.appendChild(sq);
+    cells.push(sq);
+  }
+
+  function winner(bd) {
+    for (const line of WINS) {
+      const [a, b, c] = line;
+      if (bd[a] && bd[a] === bd[b] && bd[a] === bd[c]) return { player: bd[a], line };
+    }
+    if (bd.every(v => v)) return { player: 'D', line: null };
+    return null;
+  }
+
+  function setStatus(html) { statusEl.innerHTML = html; }
+  function whoSpan(p) { return `<span class="who" style="color:var(--${p === 'X' ? 'x' : 'o'})">${p}</span>`; }
+
+  function render() {
+    board.forEach((v, i) => {
+      const el = cells[i];
+      el.textContent = v;
+      el.classList.toggle('x', v === 'X');
+      el.classList.toggle('o', v === 'O');
+      el.classList.toggle('taken', !!v);
+      el.classList.remove('win');
+    });
+  }
+
+  function finish(result) {
+    over = true;
+    if (result.line) result.line.forEach(i => cells[i].classList.add('win'));
+    if (result.player === 'D') {
+      score.D++; scDEl.textContent = score.D;
+      setStatus('🤝 무승부!');
+    } else {
+      score[result.player]++;
+      (result.player === 'X' ? scXEl : scOEl).textContent = score[result.player];
+      const label = mode === 'ai' ? (result.player === 'X' ? '🎉 승리!' : '🤖 AI 승리') : `${whoSpan(result.player)} 승리!`;
+      setStatus(label);
+    }
+  }
+
+  function nextTurnMsg() {
+    if (mode === 'ai') setStatus(turn === 'X' ? `${whoSpan('X')} 당신 차례` : `${whoSpan('O')} AI가 두는 중…`);
+    else setStatus(`${whoSpan(turn)} 차례`);
+  }
+
+  function play(i, player) {
+    if (over || board[i]) return;
+    board[i] = player;
+    render();
+    const res = winner(board);
+    if (res) return finish(res);
+    turn = player === 'X' ? 'O' : 'X';
+    nextTurnMsg();
+    if (mode === 'ai' && turn === 'O') setTimeout(aiMove, 260);
+  }
+
+  boardEl.addEventListener('click', e => {
+    const sq = e.target.closest('.sq');
+    if (!sq || over) return;
+    const i = +sq.dataset.i;
+    if (board[i]) return;
+    if (mode === 'ai') { if (turn === 'X') play(i, 'X'); }
+    else play(i, turn);
+  });
+
+  /* ---- minimax AI: computer is 'O' (maximizer), human 'X' ---- */
+  function minimax(bd, player) {
+    const res = winner(bd);
+    if (res) {
+      if (res.player === 'O') return { score: 10 };
+      if (res.player === 'X') return { score: -10 };
+      return { score: 0 };
+    }
+    let best = player === 'O' ? { score: -Infinity } : { score: Infinity };
+    for (let i = 0; i < 9; i++) {
+      if (bd[i]) continue;
+      bd[i] = player;
+      const val = minimax(bd, player === 'O' ? 'X' : 'O').score;
+      bd[i] = '';
+      if (player === 'O') { if (val > best.score) best = { score: val, i }; }
+      else { if (val < best.score) best = { score: val, i }; }
+    }
+    return best;
+  }
+
+  function aiMove() {
+    if (over) return;
+    const { i } = minimax(board.slice(), 'O');
+    if (i !== undefined) play(i, 'O');
+  }
+
+  function newRound() {
+    board = Array(9).fill('');
+    over = false;
+    turn = 'X';
+    render();
+    nextTurnMsg();
+  }
+
+  /* ---- mode switch ---- */
+  document.getElementById('modes').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    document.querySelectorAll('#modes button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+    document.getElementById('lblX').textContent = mode === 'ai' ? 'X (나)' : 'X';
+    document.getElementById('lblO').textContent = mode === 'ai' ? 'O (AI)' : 'O';
+    score = { X: 0, O: 0, D: 0 };
+    scXEl.textContent = '0'; scOEl.textContent = '0'; scDEl.textContent = '0';
+    newRound();
+  });
+
+  document.getElementById('newRound').addEventListener('click', newRound);
+  document.getElementById('resetScore').addEventListener('click', () => {
+    score = { X: 0, O: 0, D: 0 };
+    scXEl.textContent = '0'; scOEl.textContent = '0'; scDEl.textContent = '0';
+    newRound();
+  });
+
+  render();
+  nextTurnMsg();
+})();
+</script>
+</body>
+</html>
